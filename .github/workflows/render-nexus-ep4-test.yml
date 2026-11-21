@@ -1,0 +1,111 @@
+name: render-nexus-ep4-test
+
+# Uji 24 frame film NEXUS ZERO Episode 4 "WITHOUT YOU" (Eevee, setting
+# yang sama seperti Ep 3: samples 6, ray OFF, vol tile 16, DOF ON, MB ON,
+# subsurf 1, bevel 0, AgX):
+#   S4 "We did. Two hundred thirteen lives, building one door." — dinding
+#   belakang runtuh + fajar mulai naik. Blender frame 625-648 (plan f
+#   624-647): wall_collapse 0.19 -> 0.79, dawn 0.07 -> 0.28, jadi satu
+#   chunk ini menguji 13 panel NX_WallPanel yang jatuh, langit fajar
+#   (world background) dan lampu hangat kota yang mulai menyala.
+#   4 job x 6 frame, 9:16 540x960 lensk 0.62 saja.
+# Pipeline Ep 4 di pipeline-nexus/ (animate_nexus_ep4.py exec
+# build_scene_nexus_ep4.py dari direktorinya sendiri — nama file HARUS
+# memakai sufiks _ep4, bukan nama generik seperti farm Ep 3).
+on:
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { fmt: "9x16", seg: "s4-01", res_x: 540, res_y: 960, lensk: "0.62", start: 625, end: 630 }
+          - { fmt: "9x16", seg: "s4-02", res_x: 540, res_y: 960, lensk: "0.62", start: 631, end: 636 }
+          - { fmt: "9x16", seg: "s4-03", res_x: 540, res_y: 960, lensk: "0.62", start: 637, end: 642 }
+          - { fmt: "9x16", seg: "s4-04", res_x: 540, res_y: 960, lensk: "0.62", start: 643, end: 648 }
+    env:
+      FS_SAMPLES: "6"
+      FS_RAY: "0"
+      FS_VOL: "1"
+      FS_VOLTILE: "16"
+      FS_DOF: "1"
+      FS_MB: "1"
+      FS_SUB: "1"
+      FS_BEVEL: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Mesa/EGL + DejaVu font
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1-mesa-dri libglx-mesa0 fonts-dejavu-core
+          ldconfig -p | grep libEGL
+
+      - name: Restore cached Blender
+        id: cache-blender
+        uses: actions/cache@v4
+        with:
+          path: blender-4.5.3-linux-x64
+          key: blender-4.5.3-linux-x64
+
+      - name: Download Blender 4.5.3 LTS (cache miss only, with retries)
+        # download.blender.org pernah mengembalikan halaman error 61 KB
+        # (bukan tarball ~300 MB) 3x berturut-turut — curl tanpa -f
+        # menganggapnya sukses. Karena itu: curl -f, cek ukuran >200 MB
+        # sebelum tar, fallback mirror OCF Berkeley.
+        if: steps.cache-blender.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          URLS=(
+            "https://download.blender.org/release/Blender4.5/blender-4.5.3-linux-x64.tar.xz"
+            "https://mirrors.ocf.berkeley.edu/blender/release/Blender4.5/blender-4.5.3-linux-x64.tar.xz"
+          )
+          OK=0
+          for URL in "${URLS[@]}"; do
+            for i in 1 2 3; do
+              echo "Download attempt $i from $URL"
+              if curl -fSL --retry 3 --retry-delay 10 --retry-all-errors \
+                  -o blender.tar.xz "$URL" \
+                  && [ "$(stat -c%s blender.tar.xz)" -gt 200000000 ] \
+                  && tar -tf blender.tar.xz >/dev/null; then
+                echo "Download OK: $URL attempt $i ($(stat -c%s blender.tar.xz) bytes)"
+                OK=1
+                break 2
+              fi
+              echo "Download attempt $i from $URL failed, retrying in 30s..."
+              rm -f blender.tar.xz
+              sleep 30
+            done
+          done
+          if [ "$OK" != 1 ]; then echo "FAIL: Blender download failed (primer + mirror)"; exit 1; fi
+          tar -xf blender.tar.xz
+          ./blender-4.5.3-linux-x64/blender --version
+
+      - name: Render 6 frames
+        run: |
+          START=${{ matrix.start }}
+          END=${{ matrix.end }}
+          echo "Chunk ${{ matrix.fmt }}-${{ matrix.seg }}: frames $START-$END (cache-hit=${{ steps.cache-blender.outputs.cache-hit }})"
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          S=$(date +%s)
+          # NOTE: keberhasilan dinilai dari FILE FRAME, bukan exit code Blender —
+          # Mesa bisa segfault saat teardown SETELAH semua frame tersimpan.
+          ./blender-4.5.3-linux-x64/blender -b --factory-startup \
+            -P pipeline-nexus/animate_nexus_ep4.py -- "$GITHUB_WORKSPACE/out" \
+            --start $START --end $END --plan pipeline-nexus/plan.json \
+            --res ${{ matrix.res_x }} ${{ matrix.res_y }} --lensk ${{ matrix.lensk }} || echo "blender exited rc=$?"
+          E=$(date +%s)
+          N=$(ls "$GITHUB_WORKSPACE/out"/f_*.png 2>/dev/null | wc -l)
+          echo "CHUNK=${{ matrix.fmt }}-${{ matrix.seg }} CACHE_HIT=${{ steps.cache-blender.outputs.cache-hit }} FRAMES=$N/6 SECS=$((E-S))" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$N" -lt 6 ]; then echo "FAIL: only $N/6 frames rendered"; exit 1; fi
+
+      - name: Upload frames
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-ep4-frames-${{ matrix.fmt }}-${{ matrix.seg }}
+          path: out/f_*.png
+          if-no-files-found: error
