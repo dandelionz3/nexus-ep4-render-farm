@@ -395,7 +395,7 @@ jobs:
 
       - name: Zip + upload chunk to GitHub Release
         env:
-          GH_TOKEN: ${ secrets.GITHUB_TOKEN }
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHUNK: ${{ matrix.name }}
           START: ${{ matrix.start }}
           END: ${{ matrix.end }}
@@ -413,6 +413,6 @@ jobs:
           if [ "$INZIP" -lt "$EXPECTED" ]; then echo "FAIL: zip holds $INZIP, expected $EXPECTED"; exit 1; fi
           # Release (input release_tag) dibuat dulu dari luar sebelum trigger,
           # jadi 40 job paralel tinggal upload (clobber = timpa kalau re-run).
-          gh release upload "${ inputs.release_tag }" "${CHUNK}.zip" --clobber
-          gh release view "${ inputs.release_tag }" --json assets \
+          gh release upload "${{ inputs.release_tag }}" "${CHUNK}.zip" --clobber
+          gh release view "${{ inputs.release_tag }}" --json assets \
             --jq ".assets[] | select(.name == \"${CHUNK}.zip\") | .name + \" \" + (.size|tostring)"
