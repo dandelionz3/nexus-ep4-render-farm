@@ -334,6 +334,8 @@ block("NX_WallFront", (RX, -23.8, 8.0), (60, 0.4, 16.0), WALL)
 # alis, hidung, mulut, scanline, dan partikel wajah Ep 2/3 DIHAPUS total).
 # Yang tersisa di dinding belakang atas: kekosongan + panel gelap.
 # partikel digital melayang di ruangan (BIRU — bukan merah; debu cahaya bekas luka)
+import random as _random2
+_random2.seed(214)
 for i in range(40):
     px = RX + _random2.uniform(-25, 25)
     py = _random2.uniform(-20, 20)
