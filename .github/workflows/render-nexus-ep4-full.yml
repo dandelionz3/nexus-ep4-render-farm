@@ -376,10 +376,10 @@ jobs:
 
       - name: Render frames
         run: |
-          START=${ matrix.start }
-          END=${ matrix.end }
+          START=${{ matrix.start }}
+          END=${{ matrix.end }}
           EXPECTED=$((END - START + 1))
-          echo "Chunk ${ matrix.name }: frames $START-$END ($EXPECTED frames)"
+          echo "Chunk ${{ matrix.name }}: frames $START-$END ($EXPECTED frames)"
           mkdir -p "$GITHUB_WORKSPACE/out"
           S=$(date +%s)
           # NOTE: keberhasilan dinilai dari FILE FRAME, bukan exit code Blender —
@@ -387,18 +387,18 @@ jobs:
           ./blender-4.5.3-linux-x64/blender -b --factory-startup \
             -P pipeline-nexus/animate_nexus_ep4.py -- "$GITHUB_WORKSPACE/out" \
             --start $START --end $END --plan pipeline-nexus/plan.json \
-            --res ${ matrix.res_x } ${ matrix.res_y } --lensk ${ matrix.lensk } || echo "blender exited rc=$?"
+            --res ${{ matrix.res_x }} ${{ matrix.res_y }} --lensk ${{ matrix.lensk }} || echo "blender exited rc=$?"
           E=$(date +%s)
           N=$(ls "$GITHUB_WORKSPACE/out"/f_*.png 2>/dev/null | wc -l)
-          echo "CHUNK=${ matrix.name } FRAMES=$N/$EXPECTED SECS=$((E-S))" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "CHUNK=${{ matrix.name }} FRAMES=$N/$EXPECTED SECS=$((E-S))" | tee -a "$GITHUB_STEP_SUMMARY"
           if [ "$N" -lt "$EXPECTED" ]; then echo "FAIL: only $N/$EXPECTED frames rendered"; exit 1; fi
 
       - name: Zip + upload chunk to GitHub Release
         env:
           GH_TOKEN: ${ secrets.GITHUB_TOKEN }
-          CHUNK: ${ matrix.name }
-          START: ${ matrix.start }
-          END: ${ matrix.end }
+          CHUNK: ${{ matrix.name }}
+          START: ${{ matrix.start }}
+          END: ${{ matrix.end }}
         run: |
           set -euo pipefail
           EXPECTED=$((END - START + 1))
